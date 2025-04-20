@@ -132,6 +132,8 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
         validation_dataset: Optional[Dataset] = None,
         validation_labels: Optional[np.ndarray] = None,
         lr_scheduler_params: Optional[dict] = None,
+        return_loss: bool = False,
+        save_dir: Optional[str] = None,
     ):
         """Fine-tunes the Helix-mRNA model on the given dataset.
 
@@ -210,10 +212,14 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
             )
 
         LOGGER.info("Starting Fine-Tuning")
+        epoch_losses_train = []
+        epoch_losses_validation = []
+
         for j in range(epochs):
             training_loop = tqdm(train_dataloader, desc="Fine-Tuning")
             batch_loss = 0.0
             batches_processed = 0
+
             for batch in training_loop:
                 input_ids = batch["input_ids"].to(self.config["device"])
                 special_tokens_mask = batch["special_tokens_mask"].to(
@@ -239,6 +245,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                 if lr_scheduler is not None:
                     lr_scheduler.step()
 
+            epoch_losses_train.append(batch_loss / batches_processed)
             del training_loop
 
             if validation_dataset is not None:
@@ -266,9 +273,16 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                     del test_batch
                     del outputs
 
+                epoch_losses_validation.append(val_loss / count)
                 del testing_loop
 
+            if save_dir is not None and j % 5 == 0:
+                model_path = f"{save_dir}/model_epoch_{j+1}"
+                self.save_model(model_path)
+
         LOGGER.info(f"Fine-Tuning Complete. Epochs: {epochs}")
+        if return_loss:
+            return epoch_losses_train, epoch_losses_validation
 
     def get_outputs(self, dataset: Dataset) -> np.ndarray:
         """
