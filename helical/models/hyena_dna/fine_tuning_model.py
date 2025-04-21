@@ -79,7 +79,7 @@ class HyenaDNAFineTuningModel(HelicalBaseFineTuningModel, HyenaDNA):
         x = self.fine_tuning_head(x)
         return x
 
-    def train(
+    def train_fine_tune(
         self,
         train_dataset: Dataset,
         train_labels: list[int],
@@ -138,7 +138,7 @@ class HyenaDNAFineTuningModel(HelicalBaseFineTuningModel, HyenaDNA):
             )
 
         self.to(self.config["device"])
-        self.model.train()
+        self.model.train_fine_tune()
         self.fine_tuning_head.train()
         optimizer = optimizer(self.parameters(), **optimizer_params)
 

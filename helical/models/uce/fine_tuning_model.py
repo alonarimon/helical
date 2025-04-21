@@ -110,7 +110,7 @@ class UCEFineTuningModel(HelicalBaseFineTuningModel, UCE):
         output = self.fine_tuning_head(embeddings)
         return output
 
-    def train(
+    def train_fine_tune(
         self,
         train_input_data: UCEDataset,
         train_labels: np.ndarray,
@@ -172,7 +172,7 @@ class UCEFineTuningModel(HelicalBaseFineTuningModel, UCE):
             if validation_input_data is not None:
                 validation_dataloader = self.accelerator.prepare(validation_dataloader)
 
-        self.model.train()
+        self.model.train_fine_tune()
         self.fine_tuning_head.train()
 
         # disable progress bar if not the main process

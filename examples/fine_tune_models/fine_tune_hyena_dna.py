@@ -19,7 +19,7 @@ def run_fine_tuning(cfg: DictConfig):
 
     train_dataset = hyena_dna_fine_tune.process_data(input_sequences)
 
-    hyena_dna_fine_tune.train(train_dataset=train_dataset, train_labels=labels)
+    hyena_dna_fine_tune.train_fine_tune(train_dataset=train_dataset, train_labels=labels)
 
     outputs = hyena_dna_fine_tune.get_outputs(train_dataset)
 

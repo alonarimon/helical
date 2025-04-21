@@ -150,7 +150,7 @@ hyena_fine_tune = HyenaDNAFineTuningModel(config, "classification", number_uniqu
 input_dataset = hyena_fine_tune.process_data(ds["train"]["sequence"])
 
 # train the fine-tuning model on some downstream task
-hyena_fine_tune.train(input_dataset, ds["train"]["label"])
+hyena_fine_tune.train_fine_tune(input_dataset, ds["train"]["label"])
 
 ```
 

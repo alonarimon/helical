@@ -118,7 +118,7 @@ class TestSCGPTModel:
             scGPTConfig(), fine_tuning_head="classification", output_size=1
         )
         tokenized_dataset = fine_tuned_model.process_data(self.data)
-        fine_tuned_model.train(train_input_data=tokenized_dataset, train_labels=labels)
+        fine_tuned_model.train_fine_tune(train_input_data=tokenized_dataset, train_labels=labels)
         assert fine_tuned_model is not None
         outputs = fine_tuned_model.get_outputs(tokenized_dataset)
         assert outputs.shape == (len(self.data), len(labels))

@@ -33,7 +33,7 @@ def run_fine_tuning(cfg: DictConfig):
     class_id_dict = {label: i for i, label in enumerate(label_set)}
     cell_types = [class_id_dict[cell] for cell in cell_types]
 
-    uce_fine_tune.train(train_input_data=dataset, train_labels=cell_types)
+    uce_fine_tune.train_fine_tune(train_input_data=dataset, train_labels=cell_types)
 
 
 if __name__ == "__main__":

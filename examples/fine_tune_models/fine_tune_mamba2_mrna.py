@@ -21,7 +21,7 @@ def run_fine_tuning(cfg: DictConfig):
 
     train_dataset = mamba2_mrna_fine_tune.process_data(input_sequences)
 
-    mamba2_mrna_fine_tune.train(train_dataset=train_dataset, train_labels=labels)
+    mamba2_mrna_fine_tune.train_fine_tune(train_dataset=train_dataset, train_labels=labels)
 
     outputs = mamba2_mrna_fine_tune.get_outputs(train_dataset)
     print(outputs.shape)

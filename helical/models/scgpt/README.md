@@ -123,8 +123,9 @@ cell_types = list(ann_data.obs.cell_type)
 label_set = set(cell_types)
 
 # Create the fine-tuning model with the relevant configs
-scgpt_config=scGPTConfig(batch_size=10)
-scgpt_fine_tune = scGPTFineTuningModel(scGPT_config=scgpt_config, fine_tuning_head="classification", output_size=len(label_set))
+scgpt_config = scGPTConfig(batch_size=10)
+scgpt_fine_tune = scGPTFineTuningModel(scGPT_config=scgpt_config, fine_tuning_head="classification",
+                                       output_size=len(label_set))
 
 # Process the data for training
 data = scgpt_fine_tune.process_data(adata)
@@ -136,7 +137,7 @@ for i in range(len(cell_types)):
     cell_types[i] = class_id_dict[cell_types[i]]
 
 # Fine-tune
-scgpt_fine_tune.train(train_input_data=dataset, train_labels=cell_types)
+scgpt_fine_tune.train_fine_tune(train_input_data=dataset, train_labels=cell_types)
 ```
 
 ## Developers

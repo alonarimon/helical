@@ -25,7 +25,7 @@ class TestHyenaDNAFineTuning:
         self, hyenaDNAFineTune, mock_data
     ):
         input_sequences, labels = mock_data
-        hyenaDNAFineTune.train(
+        hyenaDNAFineTune.train_fine_tune(
             train_dataset=input_sequences,
             train_labels=labels,
             validation_dataset=input_sequences,

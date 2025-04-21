@@ -138,7 +138,7 @@ ann_data = ad.read_h5ad("dataset.h5ad")
 label_set = set(cell_types)
 
 # Create the fine-tuning model with the desired configs
-configurer=UCEConfig(batch_size=10)
+configurer = UCEConfig(batch_size=10)
 uce_fine_tune = UCEFineTuningModel(uce_config=configurer, fine_tuning_head="classification", output_size=len(label_set))
 
 # Process the data for training
@@ -154,7 +154,7 @@ for i in range(len(cell_types)):
     cell_types[i] = class_id_dict[cell_types[i]]
 
 # Fine-tune
-uce_fine_tune.train(train_input_data=dataset, train_labels=cell_types)
+uce_fine_tune.train_fine_tune(train_input_data=dataset, train_labels=cell_types)
 ```
 
 ## Contact

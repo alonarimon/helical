@@ -23,7 +23,7 @@ class TestHelixmRNAFineTuning:
         self, mamba2mRNAFineTune, mock_data
     ):
         input_sequences, labels = mock_data
-        mamba2mRNAFineTune.train(
+        mamba2mRNAFineTune.train_fine_tune(
             train_dataset=input_sequences,
             train_labels=labels,
             validation_dataset=input_sequences,

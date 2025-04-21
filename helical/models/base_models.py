@@ -272,10 +272,17 @@ class HelicalBaseFineTuningModel(torch.nn.Module):
     def forward():
         pass
 
+    def train(self, mode: bool = True):
+        super().train(mode)  # Restore original PyTorch behavior
+        self.fine_tuning_head.train(mode)
+        return self
+
     @abstractmethod
-    def train():
+    def train_fine_tune(): #todo: renamed, might be an issue
         pass
 
     @abstractmethod
     def get_outputs():
         pass
+
+

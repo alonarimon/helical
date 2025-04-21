@@ -16,7 +16,6 @@ import logging
 
 LOGGER = logging.getLogger(__name__)
 
-
 class HelixmRNA(HelicalRNAModel):
     """Helix-mRNA Model.
 

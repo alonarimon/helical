@@ -125,7 +125,7 @@ class scGPTFineTuningModel(HelicalBaseFineTuningModel, scGPT):
         output = self.fine_tuning_head(embeddings)
         return output
 
-    def train(
+    def train_fine_tune(
         self,
         train_input_data: Dataset,
         train_labels: np.ndarray,
@@ -202,7 +202,7 @@ class scGPTFineTuningModel(HelicalBaseFineTuningModel, scGPT):
             )
 
         self.to(device)
-        self.model.train()
+        self.model.train_fine_tune()
         self.fine_tuning_head.train()
         optimizer = optimizer(self.parameters(), **optimizer_params)
 

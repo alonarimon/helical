@@ -121,7 +121,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
 
         return logits
 
-    def train(
+    def train_fine_tune(
         self,
         train_dataset: Dataset,
         train_labels: np.ndarray,
@@ -190,7 +190,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
 
         self.to(self.config["device"])
 
-        self.model.train()
+        self.model.train_fine_tune()
         self.fine_tuning_head.train()
 
         train_dataloader = DataLoader(
@@ -289,7 +289,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
         if return_loss:
             return epoch_losses_train, epoch_losses_validation
 
-    def get_outputs(self, dataset: Dataset) -> np.ndarray:
+    def get_outputs(self, dataset: Dataset, verbose = False) -> np.ndarray:
         """
         Returns the outputs of the model for the given dataset.
 
@@ -313,7 +313,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
 
         self.model.to(self.config["device"])
 
-        progress_bar = tqdm(dataloader, desc="Generating outputs")
+        progress_bar = tqdm(dataloader, desc="Generating outputs", disable=not verbose)
         for batch in progress_bar:
             input_ids = batch["input_ids"].to(self.config["device"])
             special_tokens_mask = batch["special_tokens_mask"].to(self.config["device"])
@@ -364,5 +364,10 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
         self.fine_tuning_head.load_state_dict(
             torch.load(os.path.join(load_dir, "head.pt"))
         )
-        self.config = torch.load(os.path.join(load_dir, "config.pt"))
+        # config_dict = torch.load(os.path.join(load_dir, "config.pt"))
+        # self.config = HelixmRNAConfig(batch_size=config_dict["batch_size"],
+        #                               device=self.device,
+        #                               max_length=config_dict["input_size"],
+        #                               val_batch_size=config_dict["val_batch_size"],
+        #                                nproc=config_dict["nproc"]) # TODO: need this?
         LOGGER.info(f"Model loaded from {load_dir}")

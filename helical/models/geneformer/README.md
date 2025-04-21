@@ -227,7 +227,8 @@ label_set = set(cell_types)
 geneformer_config = GeneformerConfig(model_name="gf-12L-95M-i4096", batch_size=10)
 
 # Create a GeneformerFineTuningModel object
-geneformer_fine_tune = GeneformerFineTuningModel(geneformer_config=geneformer_config, fine_tuning_head="classification", output_size=len(label_set))
+geneformer_fine_tune = GeneformerFineTuningModel(geneformer_config=geneformer_config, fine_tuning_head="classification",
+                                                 output_size=len(label_set))
 
 # Process the data
 dataset = geneformer_fine_tune.process_data(ann_data[:10])
@@ -238,15 +239,17 @@ dataset = dataset.add_column('cell_types', cell_types)
 # Create a dictionary to map cell types to ids
 class_id_dict = dict(zip(label_set, [i for i in range(len(label_set))]))
 
+
 def classes_to_ids(example):
     example["cell_types"] = class_id_dict[example["cell_types"]]
     return example
+
 
 # Convert cell types to ids
 dataset = dataset.map(classes_to_ids, num_proc=1)
 
 # Fine-tune the model
-geneformer_fine_tune.train(train_dataset=dataset, label="cell_types")
+geneformer_fine_tune.train_fine_tune(train_dataset=dataset, label="cell_types")
 
 # Get logits from the fine-tuned model
 outputs = geneformer_fine_tune.get_outputs(dataset)

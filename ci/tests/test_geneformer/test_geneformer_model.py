@@ -206,7 +206,7 @@ class TestGeneformer:
         )
         tokenized_dataset = tokenized_dataset.add_column("labels", list([0]))
 
-        fine_tuned_model.train(train_dataset=tokenized_dataset, label="labels")
+        fine_tuned_model.train_fine_tune(train_dataset=tokenized_dataset, label="labels")
 
         outputs = fine_tuned_model.get_outputs(tokenized_dataset)
         assert outputs.shape == (len(mock_data), 1)
@@ -222,7 +222,7 @@ class TestGeneformer:
         )
         tokenized_dataset = tokenized_dataset.add_column("labels", [0])
 
-        fine_tuned_model.train(train_dataset=tokenized_dataset, label="labels")
+        fine_tuned_model.train_fine_tune(train_dataset=tokenized_dataset, label="labels")
 
         outputs = fine_tuned_model.get_outputs(tokenized_dataset)
         assert outputs.shape == (len(mock_data), 1)

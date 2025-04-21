@@ -134,7 +134,7 @@ class Mamba2mRNAFineTuningModel(HelicalBaseFineTuningModel, Mamba2mRNA):
         head_outputs = self.fine_tuning_head(mean_last_hidden_states)
         return head_outputs
 
-    def train(
+    def train_fine_tune(
         self,
         train_dataset: Dataset,
         train_labels: np.ndarray,
@@ -199,7 +199,7 @@ class Mamba2mRNAFineTuningModel(HelicalBaseFineTuningModel, Mamba2mRNA):
 
         self.to(self.config["device"])
 
-        self.model.train()
+        self.model.train_fine_tune()
         self.fine_tuning_head.train()
 
         train_dataloader = DataLoader(
