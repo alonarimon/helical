@@ -21,17 +21,20 @@ class HelixmRNAConfig:
     def __init__(
         self,
         batch_size: int = 10,
+        val_batch_size: int = -1,
         device: Literal["cpu", "cuda"] = "cpu",
         max_length: int = 12288,
         nproc: int = 1,
     ):
 
         model_name: Literal["helical-ai/Helix-mRNA"] = "helical-ai/Helix-mRNA"
-
+        if val_batch_size == -1:
+            val_batch_size = batch_size
         self.config = {
             "model_name": model_name,
             "input_size": max_length,
             "batch_size": batch_size,
+            "val_batch_size": val_batch_size,
             "device": device,
             "nproc": nproc,
         }

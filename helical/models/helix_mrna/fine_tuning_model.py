@@ -1,3 +1,4 @@
+import os
 from typing import Literal, Optional
 from helical.models.base_models import (
     HelicalBaseFineTuningHead,
@@ -163,6 +164,8 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
             e.g. lr_scheduler_params = { 'name': 'linear', 'num_warmup_steps': 0 }. num_steps will be calculated based on the number of epochs and the length of the training dataset.
 
         """
+        LOGGER.info(f"Fine-Tuning Helix-mRNA Model on {self.config['device']}")
+
         # initialise optimizer
         optimizer = optimizer(self.parameters(), **optimizer_params)
 
@@ -208,7 +211,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
             validation_dataloader = DataLoader(
                 validation_dataset,
                 collate_fn=self._collate_fn,
-                batch_size=self.config["batch_size"],
+                batch_size=self.config["val_batch_size"],
             )
 
         LOGGER.info("Starting Fine-Tuning")
@@ -226,6 +229,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                     self.config["device"]
                 )
                 labels = batch["labels"].to(self.config["device"])
+                labels = labels.unsqueeze(-1)
                 outputs = self._forward(
                     input_ids=input_ids, special_tokens_mask=special_tokens_mask
                 )
@@ -260,6 +264,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                         self.config["device"]
                     )
                     labels = test_batch["labels"].to(self.config["device"])
+                    labels = labels.unsqueeze(-1)
 
                     with torch.no_grad():
                         outputs = self._forward(
@@ -332,3 +337,32 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
         else:  # If 1D
             dataset = dataset.add_column(column_name, data)
         return dataset
+
+    def save_model(self, save_dir: str):
+        """Saves the model to the specified directory.
+
+        Parameters
+        ----------
+        save_dir : str
+            The directory to save the model to.
+        """
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(self.model.state_dict(), os.path.join(save_dir, "base_model.pt"))
+        torch.save(self.fine_tuning_head.state_dict(), os.path.join(save_dir, "head.pt"))
+        torch.save(self.config, os.path.join(save_dir, "config.pt"))
+        LOGGER.info(f"Model saved to {save_dir}")
+
+    def load_model(self, load_dir: str):
+        """Loads the model from the specified directory.
+
+        Parameters
+        ----------
+        load_dir : str
+            The directory to load the model from.
+        """
+        self.model.load_state_dict(torch.load(os.path.join(load_dir, "base_model.pt")))
+        self.fine_tuning_head.load_state_dict(
+            torch.load(os.path.join(load_dir, "head.pt"))
+        )
+        self.config = torch.load(os.path.join(load_dir, "config.pt"))
+        LOGGER.info(f"Model loaded from {load_dir}")
