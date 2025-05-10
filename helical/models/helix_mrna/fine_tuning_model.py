@@ -190,7 +190,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
 
         self.to(self.config["device"])
 
-        self.model.train_fine_tune()
+        self.model.train()
         self.fine_tuning_head.train()
 
         train_dataloader = DataLoader(

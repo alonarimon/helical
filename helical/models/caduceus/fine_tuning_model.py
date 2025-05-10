@@ -227,7 +227,7 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
         LOGGER.info("Starting Fine-Tuning")
         for j in range(epochs):
             training_loop = tqdm(train_dataloader, desc="Fine-Tuning")
-            self.model.train_fine_tune()
+            self.model.train()
             self.fine_tuning_head.train()
             batch_loss = 0.0
             batches_processed = 0
@@ -287,7 +287,7 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
                     del outputs
 
                 del testing_loop
-                self.model.train_fine_tune()
+                self.model.train()
                 self.fine_tuning_head.train()
 
         LOGGER.info(f"Fine-Tuning Complete. Epochs: {epochs}")

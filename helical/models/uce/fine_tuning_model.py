@@ -172,7 +172,7 @@ class UCEFineTuningModel(HelicalBaseFineTuningModel, UCE):
             if validation_input_data is not None:
                 validation_dataloader = self.accelerator.prepare(validation_dataloader)
 
-        self.model.train_fine_tune()
+        self.model.train()
         self.fine_tuning_head.train()
 
         # disable progress bar if not the main process

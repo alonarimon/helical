@@ -138,7 +138,7 @@ class HyenaDNAFineTuningModel(HelicalBaseFineTuningModel, HyenaDNA):
             )
 
         self.to(self.config["device"])
-        self.model.train_fine_tune()
+        self.model.train()
         self.fine_tuning_head.train()
         optimizer = optimizer(self.parameters(), **optimizer_params)
 
