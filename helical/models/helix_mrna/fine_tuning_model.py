@@ -14,6 +14,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 import numpy as np
 
+import wandb
 import logging
 
 LOGGER = logging.getLogger(__name__)
@@ -242,6 +243,8 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                 batches_processed += 1
                 training_loop.set_postfix({"loss": batch_loss / batches_processed})
                 training_loop.set_description(f"Fine-Tuning: epoch {j+1}/{epochs}")
+                wandb.log({"batch": batches_processed + (j * len(train_dataloader)),
+                            "train_loss": batch_loss / batches_processed,})
 
                 del batch
                 del outputs
@@ -250,6 +253,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                     lr_scheduler.step()
 
             epoch_losses_train.append(batch_loss / batches_processed)
+            wandb.log({"epoch": j, "train_loss": batch_loss / batches_processed})
             del training_loop
 
             if validation_dataset is not None:
@@ -274,6 +278,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                     val_loss += loss_function(outputs, labels).item()
                     count += 1.0
                     testing_loop.set_postfix({"val_loss": val_loss / count})
+                    wandb.log({"epoch": j, "val_loss": val_loss / count})
 
                     del test_batch
                     del outputs
