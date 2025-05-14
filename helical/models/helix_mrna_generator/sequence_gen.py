@@ -144,6 +144,56 @@ def generate(
 
     return generated_sequence
 
+def mutate_sequence(
+    model,
+    device,
+    tokenizer,
+    mutation_position: int,
+    original_seq: str,
+    mutation_length: int = 5,
+    softmax_temperature: float = 0.6,
+    top_k: int = 3,
+    logits_threshold: float = 0.8,
+    top_p: float = 0.0, # 0.0 = no top-p samplings
+):
+    input_data = tokenizer(original_seq, return_tensors="pt")
+    input_data["input_ids"] = input_data["input_ids"][:, :-1] # exclude SEP if present
+    input_data.to(device)
+    seq_len = len(original_seq)
+
+    # Choose a mutation window
+    if mutation_position not in range(seq_len - mutation_length + 1):
+        raise ValueError(
+            f"Mutation position {mutation_position} is out of range for sequence of length {seq_len}"
+        )
+    else: 
+        start = mutation_position
+    prefix = input_data["input_ids"][:, :start].to(device)
+    
+    # Ensure prefix is non-empty
+    scores = torch.zeros(mutation_length)
+    start_loop_ind = 0
+    if prefix.shape[1] == 0:
+        start_letter = random.choice(["A", "C", "G", "U"])
+        prefix = tokenizer(start_letter, return_tensors="pt")["input_ids"][:, :-1].to(device)
+        start_loop_ind = 1
+
+    # Begin with the prefix and generate n tokens
+    with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        for i in range(start_loop_ind, mutation_length):
+            logits = model(input_ids=prefix)[0][0][-1]
+            next_token, score = sample_next_token(logits, softmax_temperature, logits_threshold, top_k, top_p)
+            prefix = torch.cat([prefix, next_token.unsqueeze(0).unsqueeze(0)], dim=1).to(device)
+            scores[i] = score
+
+    # Append the rest of the original sequence (after the mutation)
+    suffix = input_data["input_ids"][:, start + mutation_length :]
+    mutated_full = torch.cat([prefix, suffix], dim=1)
+    
+    mutated_str = tokenizer.decode(mutated_full.squeeze())
+    return mutated_str, scores
+
+
 if __name__ == "__main__":
     # Load the language modelling version of Helix
     model = HelixmRNAForCausalLM.from_pretrained(
@@ -156,6 +206,25 @@ if __name__ == "__main__":
         padding_side="right",
     )
 
-    generated_seq = generate(model, tokenizer, max_length_to_generate=20)
+    # Generate a sequence
+    generated_seq = generate(model, tokenizer, max_length_to_generate=50)
     print(generated_seq["sequence"])
     print(generated_seq["scores"])
+
+    # Mutate a sequence of 10 characters
+    original = "ACGUGCAGUC"
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    print("Device:", device)
+    mutated, scores = mutate_sequence(model=model,
+                                      device=device,
+                                      tokenizer=tokenizer,
+                                      mutation_position=5,
+                                      original_seq=original,
+                                      mutation_length=5,
+                                      softmax_temperature=0.6,
+                                      top_k=3,
+                                      logits_threshold=0.8,
+                                      top_p=0.0)
+    print("Original:", original)
+    print("Mutated :", mutated)
+    print("Scores  :", scores)
