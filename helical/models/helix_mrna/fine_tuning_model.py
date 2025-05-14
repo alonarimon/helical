@@ -13,7 +13,7 @@ from torch.nn.modules import loss
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import numpy as np
-
+import torch.nn as nn
 import wandb
 import logging
 
@@ -121,6 +121,73 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
         logits = self.fine_tuning_head(hidden_states)
 
         return logits
+    
+    def optimize_conservatism_embeddings(
+    self,
+    embeds_input: torch.Tensor,
+    input_ids: torch.Tensor,
+    model: nn.Module,
+    special_tokens_mask: torch.Tensor,
+    steps: int = 50,
+    lr: float = 0.05,
+    entropy_coeff: float =  0.9,
+    ) -> torch.Tensor:
+        x_opt = embeds_input.clone().detach().requires_grad_(True)
+        for _ in range(steps):
+            with torch.no_grad():
+                transformer_out = self.model(inputs_embeds=x_opt, attention_mask=1 - special_tokens_mask)[0]
+
+            transformer_out.requires_grad_(True)
+
+            # Faster pooling: simple mean pooling for speed
+            pooled = transformer_out.mean(dim=1)
+
+            # Directly score pooled representations
+            score = self.fine_tuning_head(pooled).mean()
+
+            grad = torch.autograd.grad(score, transformer_out, retain_graph=False)[0]
+
+            # average gradient over sequence length for speed
+            with torch.no_grad():
+                grad_mean = grad.mean(dim=1, keepdim=True)
+                x_opt += lr * grad_mean
+
+        return x_opt.detach()
+    
+    def embed_forward(self, x, input_ids, special_tokens_mask):
+        with torch.no_grad():
+            transformer_out = self.model(inputs_embeds=x, attention_mask=1 - special_tokens_mask)[0]
+
+        batch_size = transformer_out.shape[0]
+        sequence_lengths = (
+            torch.eq(input_ids, self.pretrained_config.pad_token_id).int().argmax(-1) - 1
+        )
+        sequence_beginnings = (
+            (~torch.eq(input_ids, self.pretrained_config.pad_token_id)).int().argmax(-1).to(transformer_out.device)
+        )
+        sequence_lengths = sequence_lengths % input_ids.shape[-1] - 1
+        sequence_lengths = sequence_lengths.to(transformer_out.device)
+
+        mask = (
+            sequence_beginnings[:, None]
+            < torch.arange(transformer_out.size(1), device=transformer_out.device)[None, :]
+        )
+        masked_tensor = transformer_out * mask.unsqueeze(-1)
+        sum_tensor = masked_tensor.sum(dim=1)
+        mean_states = sum_tensor / (
+            sequence_lengths.unsqueeze(-1).float()
+            - sequence_beginnings.unsqueeze(-1).float()
+        )
+
+        selected_last_hidden_states = transformer_out[
+            torch.arange(batch_size, device=transformer_out.device), sequence_lengths
+        ]
+
+        pooled = torch.cat([selected_last_hidden_states, mean_states], dim=-1)
+
+        return pooled  # Now has shape (batch_size, 512), correct for your fine-tuning head
+
+
 
     def train_fine_tune(
         self,
@@ -136,6 +203,14 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
         lr_scheduler_params: Optional[dict] = None,
         return_loss: bool = False,
         save_dir: Optional[str] = None,
+        use_com_loss=False,
+        com_steps: int = 50,
+        com_lr: float = 0.05,
+        com_entropy_coeff: float = 0.9,
+        com_overestimation_limit=2.0,
+        com_aplha_init=0.1,
+        com_alpha_lr=0.01,
+
     ):
         """Fine-tunes the Helix-mRNA model on the given dataset.
 
@@ -225,6 +300,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
             batches_processed = 0
 
             for batch in training_loop:
+                
                 input_ids = batch["input_ids"].to(self.config["device"])
                 special_tokens_mask = batch["special_tokens_mask"].to(
                     self.config["device"]
@@ -235,23 +311,78 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                     input_ids=input_ids, special_tokens_mask=special_tokens_mask
                 )
 
-                loss = loss_function(outputs, labels)
-                loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
+
+                if not use_com_loss:
+                    print(f"inputs: {input_ids[:1]}")
+                    print(f"outputs: {outputs[:1]}")
+                    print(f"labels: {labels[:1]}")
+                    loss = loss_function(outputs, labels)
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+                    
+                else:
+
+                    # === Extract embeddings from inputs ===
+                    inputs_embeds = self.model.embeddings(input_ids)
+
+                    # === Find negative samples (adversarial embeddings) ===
+                    perturbed_embeds = self.optimize_conservatism_embeddings(
+                        embeds_input=inputs_embeds,
+                        model=self.fine_tuning_head,
+                        input_ids=input_ids,
+                        steps=com_steps,
+                        lr=com_lr,
+                        entropy_coeff=com_entropy_coeff,
+                        special_tokens_mask=special_tokens_mask,
+                    )
+
+                    # === Predictions on original (positive) and perturbed (negative) embeddings ===
+                    pred_pos = outputs
+                    pooled_adv = self.embed_forward(
+                        x=perturbed_embeds,
+                        input_ids=input_ids,
+                        special_tokens_mask=special_tokens_mask
+                    )
+                    pred_neg = self.fine_tuning_head(pooled_adv)
+
+                    # === Calculate overestimation ===
+                    overestimation = (pred_neg - pred_pos).detach()
+
+                    # === Initialize alpha (add these lines outside the training loop, at the top of train_fine_tune) ===
+                    if not hasattr(self, 'log_alpha'):
+                        self.log_alpha = torch.tensor(np.log(com_aplha_init), dtype=torch.float32, requires_grad=True, device=self.config["device"])
+                        self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=com_alpha_lr)
+
+                    # === Compute total losses ===
+                    alpha = self.log_alpha.exp()
+
+                    base_loss = loss_function(pred_pos, labels)
+                    model_loss = base_loss + (alpha * overestimation).mean()
+                    alpha_loss = (alpha * com_overestimation_limit - alpha * overestimation).mean()
+                    loss = model_loss
+
+                    # === Logging additional COM metrics (optional but recommended) ===
+                    wandb.log({
+                        "train/overestimation": overestimation.mean().item(),
+                        "train/alpha": alpha.item(),
+                    })
+
+                    # === Gradient updates for model ===
+                    optimizer.zero_grad()
+                    model_loss.backward(retain_graph=True)  # retain graph for alpha optimization
+                    optimizer.step()
+
+                    # === Gradient updates for alpha ===
+                    self.alpha_optimizer.zero_grad()
+                    alpha_loss.backward()
+                    self.alpha_optimizer.step()
+                
                 batch_loss += loss.item()
-                batches_processed += 1
-                training_loop.set_postfix({"loss": batch_loss / batches_processed})
-                training_loop.set_description(f"Fine-Tuning: epoch {j+1}/{epochs}")
-                wandb.log({"batch": batches_processed + (j * len(train_dataloader)),
-                            "train_loss": batch_loss / batches_processed,})
-
-                del batch
-                del outputs
-
-                if lr_scheduler is not None:
-                    lr_scheduler.step()
-
+                batches_processed += 1.0
+                
+            training_loop.set_postfix({"train_loss": batch_loss / batches_processed})
             epoch_losses_train.append(batch_loss / batches_processed)
             wandb.log({"epoch": j, "train_loss": batch_loss / batches_processed})
             del training_loop
