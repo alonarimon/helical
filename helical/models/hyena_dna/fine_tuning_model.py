@@ -13,6 +13,7 @@ from tqdm import tqdm
 from transformers import get_scheduler
 import logging
 import numpy as np
+import wandb
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,8 @@ class HyenaDNAFineTuningModel(HelicalBaseFineTuningModel, HyenaDNA):
         epochs: int = 1,
         lr_scheduler_params: Optional[dict] = None,
         shuffle: bool = True,
+        save_dir: Optional[str] = None,
+        save_model_every: int = 5,
     ):
         """Fine-tunes the Hyena-DNA model with different head modules.
 
@@ -151,6 +154,8 @@ class HyenaDNAFineTuningModel(HelicalBaseFineTuningModel, HyenaDNA):
             )
 
         logger.info("Starting Fine-Tuning")
+        epoch_losses_train = []
+        epoch_losses_validation = []
         for i in range(epochs):
             batch_loss = 0.0
             batches_processed = 0
@@ -168,10 +173,16 @@ class HyenaDNAFineTuningModel(HelicalBaseFineTuningModel, HyenaDNA):
 
                 training_loop.set_postfix({"loss": batch_loss / batches_processed})
                 training_loop.set_description(f"Fine-Tuning: epoch {i+1}/{epochs}")
-
+                wandb.log(
+                    {
+                        "batch": i * len(train_dataloader) + batches_processed,
+                        "batch_loss": batch_loss / batches_processed,
+                    }
+                )
                 if lr_scheduler is not None:
                     lr_scheduler.step()
-
+            epoch_losses_train.append(batch_loss / batches_processed)
+            wandb.log({"epoch": i, "epoch_loss_train": epoch_losses_train[-1]})
             if validation_dataset is not None and validation_labels is not None:
                 with torch.no_grad():
                     validation_batches_processed = 0
@@ -188,7 +199,22 @@ class HyenaDNAFineTuningModel(HelicalBaseFineTuningModel, HyenaDNA):
                         validation_loop.set_postfix(
                             {"val_loss": val_loss / validation_batches_processed}
                         )
+                        wandb.log(
+                            {
+                                "epoch": i,
+                                "val_loss": val_loss / validation_batches_processed,
+                            }
+                        )
+                    epoch_losses_validation.append(
+                        val_loss / validation_batches_processed
+                    )
+
+            if save_dir is not None and i % save_model_every == 0:
+                model_path = f"{save_dir}/model_epoch_{i+1}"
+                self.save_model(model_path)
+
         logger.info(f"Fine-Tuning Complete. Epochs: {epochs}")
+        return epoch_losses_train, epoch_losses_validation
 
     def get_outputs(self, dataset: Dataset) -> np.ndarray:
         """Get the outputs of the fine-tuned model.

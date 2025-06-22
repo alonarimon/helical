@@ -1,3 +1,4 @@
+import os
 from typing import Literal, Optional
 from helical.models.base_models import (
     HelicalBaseFineTuningHead,
@@ -12,7 +13,7 @@ from torch.nn.modules import loss
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import numpy as np
-
+import wandb
 import logging
 
 LOGGER = logging.getLogger(__name__)
@@ -147,6 +148,7 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
         lr_scheduler_params: Optional[dict] = None,
         conjoin_train: bool = False,
         conjoin_eval: bool = False,
+        save_dir: Optional[str] = None,
     ):
         """Fine-tunes the Caduceus model on the given dataset.
 
@@ -225,6 +227,8 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
             )
 
         LOGGER.info("Starting Fine-Tuning")
+        epoch_losses_train = []
+        epoch_losses_validation = []
         for j in range(epochs):
             training_loop = tqdm(train_dataloader, desc="Fine-Tuning")
             self.model.train()
@@ -234,6 +238,7 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
             for batch in training_loop:
                 input_ids = batch["input_ids"].to(self.config["device"])
                 labels = batch["labels"].to(self.config["device"])
+                labels = labels.unsqueeze(-1)
 
                 outputs = self._forward(
                     input_ids=input_ids,
@@ -250,13 +255,20 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
                 batches_processed += 1
                 training_loop.set_postfix({"loss": batch_loss / batches_processed})
                 training_loop.set_description(f"Fine-Tuning: epoch {j+1}/{epochs}")
+                wandb.log(
+                    {
+                        "batch": batches_processed + (j * len(train_dataloader)),
+                        "train_loss": batch_loss / batches_processed,
+                    }
+                )
 
                 del batch
                 del outputs
 
                 if lr_scheduler is not None:
                     lr_scheduler.step()
-
+            epoch_losses_train.append(batch_loss / batches_processed)
+            wandb.log({"epoch": j, "train_loss": batch_loss / batches_processed})
             del training_loop
 
             if validation_dataset is not None:
@@ -270,6 +282,7 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
                 for test_batch in testing_loop:
                     input_ids = test_batch["input_ids"].to(self.config["device"])
                     labels = test_batch["labels"].to(self.config["device"])
+                    labels = labels.unsqueeze(-1)
 
                     with torch.no_grad():
                         outputs = self._forward(
@@ -282,15 +295,22 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
                     val_loss += loss_function(outputs, labels).item()
                     count += 1.0
                     testing_loop.set_postfix({"val_loss": val_loss / count})
+                    wandb.log({"epoch": j, "val_loss": val_loss / count})
 
                     del test_batch
                     del outputs
 
+                epoch_losses_validation.append(val_loss / count)
                 del testing_loop
                 self.model.train()
                 self.fine_tuning_head.train()
 
+            if save_dir is not None and j % 5 == 0:
+                model_path = f"{save_dir}/model_epoch_{j+1}"
+                self.save_model(model_path)
+
         LOGGER.info(f"Fine-Tuning Complete. Epochs: {epochs}")
+        return epoch_losses_train, epoch_losses_validation
 
     def get_outputs(self, dataset: Dataset, conjoin: bool = False) -> np.ndarray:
         """Get the embeddings for the tokenized sequence.
@@ -338,3 +358,31 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
         else:  # If 1D
             dataset = dataset.add_column(column_name, data)
         return dataset
+
+    def save_model(self, save_dir: str):
+        """Saves the model to the specified directory.
+
+        Parameters
+        ----------
+        save_dir : str
+            The directory to save the model to.
+        """
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(self.model.state_dict(), os.path.join(save_dir, "base_model.pt"))
+        torch.save(self.fine_tuning_head.state_dict(), os.path.join(save_dir, "head.pt"))
+        torch.save(self.config, os.path.join(save_dir, "config.pt"))
+        LOGGER.info(f"Model saved to {save_dir}")
+
+    def load_model(self, load_dir: str):
+        """Loads the model from the specified directory.
+
+        Parameters
+        ----------
+        load_dir : str
+            The directory to load the model from.
+        """
+        self.model.load_state_dict(torch.load(os.path.join(load_dir, "base_model.pt")))
+        self.fine_tuning_head.load_state_dict(
+            torch.load(os.path.join(load_dir, "head.pt"))
+        )
+        LOGGER.info(f"Model loaded from {load_dir}")

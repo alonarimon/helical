@@ -14,6 +14,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 import numpy as np
 
+import wandb
 import logging
 
 LOGGER = logging.getLogger(__name__)
@@ -242,6 +243,8 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                 batches_processed += 1
                 training_loop.set_postfix({"loss": batch_loss / batches_processed})
                 training_loop.set_description(f"Fine-Tuning: epoch {j+1}/{epochs}")
+                wandb.log({"batch": batches_processed + (j * len(train_dataloader)),
+                            "train_loss": batch_loss / batches_processed,})
 
                 del batch
                 del outputs
@@ -250,6 +253,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                     lr_scheduler.step()
 
             epoch_losses_train.append(batch_loss / batches_processed)
+            wandb.log({"epoch": j, "train_loss": batch_loss / batches_processed})
             del training_loop
 
             if validation_dataset is not None:
@@ -274,6 +278,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
                     val_loss += loss_function(outputs, labels).item()
                     count += 1.0
                     testing_loop.set_postfix({"val_loss": val_loss / count})
+                    wandb.log({"epoch": j, "val_loss": val_loss / count})
 
                     del test_batch
                     del outputs
@@ -289,7 +294,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
         if return_loss:
             return epoch_losses_train, epoch_losses_validation
 
-    def get_outputs(self, dataset: Dataset) -> np.ndarray:
+    def get_outputs(self, dataset: Dataset, verbose = False) -> np.ndarray:
         """
         Returns the outputs of the model for the given dataset.
 
@@ -313,7 +318,7 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
 
         self.model.to(self.config["device"])
 
-        progress_bar = tqdm(dataloader, desc="Generating outputs")
+        progress_bar = tqdm(dataloader, desc="Generating outputs", disable=not verbose)
         for batch in progress_bar:
             input_ids = batch["input_ids"].to(self.config["device"])
             special_tokens_mask = batch["special_tokens_mask"].to(self.config["device"])
@@ -364,5 +369,4 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
         self.fine_tuning_head.load_state_dict(
             torch.load(os.path.join(load_dir, "head.pt"))
         )
-        self.config = torch.load(os.path.join(load_dir, "config.pt"))
         LOGGER.info(f"Model loaded from {load_dir}")

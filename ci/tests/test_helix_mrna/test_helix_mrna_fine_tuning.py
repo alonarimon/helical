@@ -1,7 +1,14 @@
+import wandb
 import pytest
 import torch
 from helical.models.helix_mrna import HelixmRNAConfig, HelixmRNAFineTuningModel
 
+
+wandb.init(
+    project="bioseq_qd_design",
+    name="test_helix_mrna_fine_tuning",
+    mode="disabled",
+)
 
 class TestHelixmRNAFineTuning:
     @pytest.fixture
