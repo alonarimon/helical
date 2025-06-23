@@ -312,7 +312,7 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
         LOGGER.info(f"Fine-Tuning Complete. Epochs: {epochs}")
         return epoch_losses_train, epoch_losses_validation
 
-    def get_outputs(self, dataset: Dataset, conjoin: bool = False) -> np.ndarray:
+    def get_outputs(self, dataset: Dataset, conjoin: bool = False, verbose = False) -> np.ndarray:
         """Get the embeddings for the tokenized sequence.
 
         Parameters
@@ -321,6 +321,8 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
             The output dataset from `process_data`.
         conjoin : bool, default=False
             Whether to conjoin the forward and reverse complement sequences.
+        verbose : bool, default=False
+            Whether to print progress information.
         """
         dataloader = DataLoader(
             dataset,
@@ -335,7 +337,7 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
         self.model.eval()
         self.fine_tuning_head.eval()
 
-        progress_bar = tqdm(dataloader, desc="Generating outputs")
+        progress_bar = tqdm(dataloader, desc="Generating outputs", disable=not verbose)
         for batch in progress_bar:
             input_ids = batch["input_ids"].to(self.config["device"])
 
@@ -385,4 +387,6 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
         self.fine_tuning_head.load_state_dict(
             torch.load(os.path.join(load_dir, "head.pt"))
         )
+        self.model.eval()
+        self.fine_tuning_head.eval()
         LOGGER.info(f"Model loaded from {load_dir}")

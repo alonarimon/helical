@@ -369,4 +369,6 @@ class HelixmRNAFineTuningModel(HelicalBaseFineTuningModel, HelixmRNA):
         self.fine_tuning_head.load_state_dict(
             torch.load(os.path.join(load_dir, "head.pt"))
         )
+        self.model.eval()
+        self.fine_tuning_head.eval()
         LOGGER.info(f"Model loaded from {load_dir}")
