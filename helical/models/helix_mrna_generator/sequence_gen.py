@@ -4,6 +4,7 @@ from helical.models.helix_mrna_generator.model.modelling_helix_mrna import Helix
 from helical.models.helix_mrna_generator.model.hg38_char_tokenizer import CharTokenizer
 import torch
 import random
+import torch.nn.functional as F
 
 # TODO: unite with regular helix?
 
@@ -157,6 +158,21 @@ def generate(
 
     return generated_sequence
 
+
+def compute_sequence_log_likelihood(model, sequences, tokenizer, device="cuda"):
+    """
+    Compute total log-likelihood for a batch of sequences.
+    Assumes input_ids is of shape (batch_size, seq_len) and contains token IDs.
+    """
+    input_ids = tokenizer(sequences, return_tensors="pt")["input_ids"].to(device)
+    with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        logits = model(input_ids=input_ids).logits  # (batch_size, seq_len, vocab_size) 
+        log_probs = F.log_softmax(logits[:, :-1, :], dim=-1)  # convert logits to log probabilities, excluding the last token (batch_size, seq_len - 1, vocab_size)
+        targets = input_ids[:, 1:]  # shift labels by one
+        token_log_probs = log_probs.gather(2, targets.unsqueeze(-1)).squeeze(-1)  # (batch_size, seq_len - 1)
+        sequence_log_likelihood = token_log_probs.sum(dim=1)  # (batch_size,)
+    return sequence_log_likelihood
+
 def mutate_sequence(
     model,
     device,
@@ -209,7 +225,17 @@ def mutate_sequence(
     return mutated_str, scores
 
 
+
+
 if __name__ == "__main__":
+
+    
+    # set seeds 
+    random.seed(42)
+    np.random.seed(42)
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
     # Load the language modelling version of Helix
     model = HelixmRNAForCausalLM.from_pretrained(
     "helical-ai/helix-mRNA",
@@ -230,6 +256,8 @@ if __name__ == "__main__":
     original = ["ACGUGCAGUC", "GAUCGUACGU"]
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print("Device:", device)
+    print("Original sequence:", original)
+    print("Mutating sequence in position 0 with length 5...")
     mutated, scores = mutate_sequence(model=model,
                                       device=device,
                                       tokenizer=tokenizer,
@@ -237,9 +265,32 @@ if __name__ == "__main__":
                                       original_seq=original,
                                       mutation_length=5,
                                       softmax_temperature=0.6,
-                                      top_k=3,
+                                      top_k=1,
                                       logits_threshold=0.8,
                                       top_p=0.0)
+    
+    # Compute resulting sequence log likelihoods
+    log_likelihoods = compute_sequence_log_likelihood(model, mutated, tokenizer=tokenizer, device=device)
+    print("Log likelihoods:", log_likelihoods.cpu().numpy())
     print("Original:", original)
     print("Mutated :", mutated)
     print("Scores  :", scores)
+
+    print("Mutating sequence in position 3 with length 5...")
+    mutated, scores = mutate_sequence(model=model,
+                                      device=device,
+                                      tokenizer=tokenizer,
+                                      mutation_position=3,
+                                      original_seq=original,
+                                      mutation_length=5,
+                                      softmax_temperature=0.6,
+                                      top_k=1,
+                                      logits_threshold=0.8,
+                                      top_p=0.0)
+    # Compute resulting sequence log likelihoods
+    log_likelihoods = compute_sequence_log_likelihood(model, mutated, tokenizer=tokenizer, device=device)
+    print("Log likelihoods:", log_likelihoods.cpu().numpy())
+    print("Original:", original)
+    print("Mutated :", mutated)
+    print("Scores  :", scores)
+
