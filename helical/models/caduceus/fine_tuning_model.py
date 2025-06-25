@@ -6,6 +6,7 @@ from helical.models.base_models import (
 )
 from helical.models.caduceus import Caduceus, CaduceusConfig
 from datasets import Dataset
+from sklearn.isotonic import spearmanr
 from transformers import get_scheduler
 import torch
 from torch import optim
@@ -278,6 +279,7 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
                 self.model.eval()
                 self.fine_tuning_head.eval()
                 val_loss = 0.0
+                spearman_corr = 0.0
                 count = 0.0
                 for test_batch in testing_loop:
                     input_ids = test_batch["input_ids"].to(self.config["device"])
@@ -293,12 +295,17 @@ class CaduceusFineTuningModel(HelicalBaseFineTuningModel, Caduceus):
                         )
 
                     val_loss += loss_function(outputs, labels).item()
+                    spearmanr_val, _ = spearmanr(labels.cpu().numpy(), outputs.cpu().numpy())
+                    spearman_corr += spearmanr_val
                     count += 1.0
                     testing_loop.set_postfix({"val_loss": val_loss / count})
-                    wandb.log({"epoch": j, "val_loss": val_loss / count})
 
                     del test_batch
                     del outputs
+                
+                wandb.log({"epoch": j, 
+                           "val_loss": val_loss / count, 
+                           "spearman_corr": spearman_corr / count})
 
                 epoch_losses_validation.append(val_loss / count)
                 del testing_loop
