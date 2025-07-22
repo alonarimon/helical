@@ -164,7 +164,8 @@ def compute_sequence_log_likelihood(model, sequences, tokenizer, device="cuda"):
     Compute total log-likelihood for a batch of sequences.
     Assumes input_ids is of shape (batch_size, seq_len) and contains token IDs.
     """
-    input_ids = tokenizer(sequences, return_tensors="pt")["input_ids"].to(device)
+    input_ids = tokenizer(sequences, return_tensors="pt")["input_ids"].to(device) # (batch_size, seq_len + 1)
+    input_ids = input_ids[:, :-1] # (batch_size, seq_len) # Exclude the last token (EOS), as it is not needed for log likelihood calculation
     with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
         logits = model(input_ids=input_ids).logits  # (batch_size, seq_len, vocab_size) 
         log_probs = F.log_softmax(logits[:, :-1, :], dim=-1)  # convert logits to log probabilities, excluding the last token (batch_size, seq_len - 1, vocab_size)
