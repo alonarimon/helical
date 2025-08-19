@@ -160,7 +160,7 @@ def generate(
     return generated_sequence
 
 
-def compute_sequence_log_likelihood_hyena(model, sequences, tokenizer, device="cuda"):
+def compute_sequence_log_likelihood_hyena(model, sequences, tokenizer, device="cuda", normalize=False):
     """
     Compute total log-likelihood for a batch of sequences.
     Assumes input_ids is of shape (batch_size, seq_len) and contains token IDs.
@@ -172,7 +172,10 @@ def compute_sequence_log_likelihood_hyena(model, sequences, tokenizer, device="c
         log_probs = F.log_softmax(logits[:, :-1, :], dim=-1)  # convert logits to log probabilities, excluding the last token (batch_size, seq_len - 1, vocab_size)
         targets = input_ids[:, 1:]  # shift labels by one
         token_log_probs = log_probs.gather(2, targets.unsqueeze(-1)).squeeze(-1)  # (batch_size, seq_len - 1)
-        sequence_log_likelihood = token_log_probs.sum(dim=1)  # (batch_size,)
+        if normalize:
+            sequence_log_likelihood = token_log_probs.mean(dim=1)  # (batch_size,)
+        else:
+            sequence_log_likelihood = token_log_probs.sum(dim=1)
     return sequence_log_likelihood
 
 
@@ -243,6 +246,10 @@ if __name__ == "__main__":
     ).to("cuda")
 
     tokenizer = HyenaDNATokenizer(padding_side="right", model_max_length=160_000)
+    # Print the vocbulary 
+    vocab = tokenizer.get_vocab()
+    print("Vocabulary size:", len(vocab))
+    print("Vocabulary:", list(vocab.keys()))
 
 
     # Generate a sequence
