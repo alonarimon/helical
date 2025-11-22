@@ -6,7 +6,6 @@ import torch
 import random
 import torch.nn.functional as F
 
-# TODO: unite with regular helix?
 
 def softmax_with_temperature(logits, temperature):
     """
@@ -159,7 +158,7 @@ def generate(
     return generated_sequence
 
 
-def compute_sequence_log_likelihood(model, sequences, tokenizer, device="cuda", normalize=False, seq_len=50):
+def compute_sequence_log_likelihood(model, sequences, tokenizer, device="cuda", normalize=False):
     """
     Compute total log-likelihood for a batch of sequences.
     Assumes input_ids is of shape (batch_size, seq_len) and contains token IDs.
